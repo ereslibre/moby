@@ -253,6 +253,16 @@ func (cli *daemonCLI) start(ctx context.Context) (err error) {
 		return errors.Wrap(err, "failed to start API server")
 	}
 
+	// Note that CDI is not inherently linux-specific, there are some linux-specific assumptions / implementations in the code that
+	// queries the properties of device on the host as well as performs the injection of device nodes and their access permissions into the OCI spec.
+	//
+	// In order to lift this restriction the following would have to be addressed:
+	// - Support needs to be added to the cdi package for injecting Windows devices: https://tags.cncf.io/container-device-interface/issues/28
+	// - The DeviceRequests API must be extended to non-linux platforms.
+	if runtime.GOOS == "linux" && cli.Config.Features["cdi"] {
+		daemon.RegisterCDIDriver(cli.Config.CDISpecDirs...)
+	}
+
 	d, err := daemon.NewDaemon(ctx, cli.Config, pluginStore, cli.authzMiddleware)
 	if err != nil {
 		return errors.Wrap(err, "failed to start daemon")
@@ -263,16 +273,6 @@ func (cli *daemonCLI) start(ctx context.Context) (err error) {
 	// validate after NewDaemon has restored enabled plugins. Don't change order.
 	if err := validateAuthzPlugins(cli.Config.AuthorizationPlugins, pluginStore); err != nil {
 		return errors.Wrap(err, "failed to validate authorization plugin")
-	}
-
-	// Note that CDI is not inherently linux-specific, there are some linux-specific assumptions / implementations in the code that
-	// queries the properties of device on the host as well as performs the injection of device nodes and their access permissions into the OCI spec.
-	//
-	// In order to lift this restriction the following would have to be addressed:
-	// - Support needs to be added to the cdi package for injecting Windows devices: https://tags.cncf.io/container-device-interface/issues/28
-	// - The DeviceRequests API must be extended to non-linux platforms.
-	if runtime.GOOS == "linux" && cli.Config.Features["cdi"] {
-		daemon.RegisterCDIDriver(cli.Config.CDISpecDirs...)
 	}
 
 	cli.d = d
